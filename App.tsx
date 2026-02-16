@@ -1,45 +1,33 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import Header from './Header';
 
 function App() {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
-    </SafeAreaProvider>
-  );
+    return (
+        <SafeAreaProvider>
+            <SafeAreaView style={styles.wrapper}>
+                {/* <Header />
+                <Text style={[styles.text1, styles.text2]}>Project-1</Text>
+                <Text style={styles.text2}>Cofinex</Text> */}
+            </SafeAreaView>
+        </SafeAreaProvider>
+    )
 }
-
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
-
-  return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+    // text1: {
+    //     color: 'red'
+    // },
+    // text2: {
+    //     fontSize: 20,
+    //     fontWeight: 'bold',
+
+    // }
+    wrapper: {
+        flex: 1,
+        backgroundColor: '#1ee5e8',
+        alignItems: 'center',
+        justifyContent: 'center',
+    }
 });
 
 export default App;
