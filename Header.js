@@ -1,11 +1,17 @@
 import { Text, View } from 'react-native';
 
-function Header() {
+// function Header() {
+//     return (
+//         <View>
+//             <Text>Header</Text>
+//         </View>
+//     )
+// }
+const Header = () => {
     return (
         <View>
             <Text>Header</Text>
         </View>
     )
 }
-
 export default Header;
