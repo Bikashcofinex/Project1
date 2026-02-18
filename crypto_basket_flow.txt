@@ -1,0 +1,333 @@
+PHASE 1: Discovery & Evaluation (Common for Both Flows)
+
+This is where the user explores and evaluates baskets before investing.
+
+🧭 Step 1: Browse Crypto Baskets
+
+User Action:
+User navigates to the “Crypto Basket” section from:
+
+Home Tab
+or
+
+Market Tab
+
+Screen: CryptoBasketListPage
+
+What the user sees:
+
+List of available baskets
+
+Categories like:
+
+Mid-cap Basket
+
+Large-cap Basket
+
+Small-cap Basket
+
+Performance indicators (e.g., 7-day, 30-day returns)
+
+Risk rating (High / Medium / Low)
+
+Minimum investment amount
+
+User Goal:
+
+Compare different baskets and choose one that fits their risk appetite and strategy.
+
+📊 Step 2: Evaluate a Specific Basket
+
+User Action:
+User taps on a basket (e.g., "Mid-cap Basket").
+
+Screen: CryptoBasketDetailsPage
+
+What the user can review:
+
+📈 Performance Chart
+
+Historical price movement
+
+Growth trend over time
+
+⚠ Risk Rating
+
+High / Medium / Low risk indicator
+
+🧩 Portfolio Allocation
+
+Exact token distribution
+Example:
+
+20% SOL
+
+15% PYTH
+
+10% AVAX
+
+etc.
+
+💰 Minimum Investment
+
+The lowest allowed investment amount
+
+User Goal:
+
+Understand:
+
+How the basket performed
+
+What tokens are included
+
+Whether the risk matches their comfort level
+
+🚀 Step 3: Click “Invest Now”
+
+When the user is satisfied, they tap “Invest Now.”
+
+Before proceeding, the system performs validation checks.
+
+🔐 SYSTEM VALIDATION CHECKS (Before Investment)
+
+These checks ensure compliance and user readiness.
+
+1️⃣ Authentication Check
+
+If user is not logged in → Redirect to Login screen.
+
+2️⃣ KYC Verification Check
+
+API call: /users/fiat/INR/kyc
+
+If KYC is incomplete → Redirect to KycStepperPage.
+
+3️⃣ Bank Details Check (For Indian Users)
+
+If bank account not added → Prompt to add bank details.
+
+Only after passing all checks does the user proceed.
+
+🔵 FLOW A: One-Time Investment (Lump Sum)
+
+This is for users who want to invest a single amount immediately.
+
+🧾 Step 1: Choose Investment Type
+
+After clicking “Invest Now,” a bottom sheet appears.
+
+Component: InvestmentTypeBottomSheet
+
+User selects:
+✅ One-Time Investment
+
+💰 Step 2: Enter Investment Details
+
+Screen: BasketBuyPage
+
+User Inputs:
+1️⃣ Investment Amount
+
+Example:
+
+500 USDT
+
+The app validates:
+
+Amount must be ≥ minimumInvestment
+
+If not → Shows validation error.
+
+2️⃣ Select Wallet
+
+User chooses source wallet:
+
+Funding Wallet
+or
+
+Spot Wallet
+
+This is where money will be deducted from.
+
+3️⃣ Currency Toggle
+
+User can switch between:
+
+USDT
+
+INR
+
+Other supported currencies
+
+The UI dynamically converts values.
+
+📦 Step 3: Review Portfolio Distribution
+
+Before confirming, the app shows:
+
+“How your 500 USDT will be distributed”
+
+Example:
+
+75 USDT → SOL (15%)
+
+75 USDT → PYTH (15%)
+
+etc.
+
+This gives transparency.
+
+✅ Step 4: Confirm Investment
+
+User taps:
+“Confirm One-Time Investment”
+
+Technical Action:
+
+Calls:
+
+createSubscription
+
+
+With:
+
+paymentMode: "ONE_TIME"
+
+🎉 Step 5: Success Screen
+
+Screen: InvestmentSuccessPage
+
+Displays:
+
+“Investment Complete”
+
+Total invested amount
+
+Tokens purchased
+
+Transaction summary
+
+Funds are deducted immediately.
+
+🔁 FLOW B: Recurring Investment (SIP / Auto-Invest)
+
+This is for long-term investors using Dollar Cost Averaging (DCA).
+
+🧾 Step 1: Choose Recurring
+
+In the same bottom sheet:
+
+User selects:
+🔁 Recurring Investment
+
+💵 Step 2: Configure Installment & Schedule
+
+Screen: BasketBuyPage
+
+Now additional fields appear.
+
+1️⃣ Installment Amount
+
+Example:
+
+50 USDT per cycle
+
+Validation:
+
+Must meet minimum installment requirement
+
+2️⃣ Select Frequency (Cycle)
+
+User chooses:
+
+Daily
+
+Weekly
+
+Monthly
+
+Quarterly
+
+3️⃣ Choose Specific Day/Date
+
+Depending on selection:
+
+If Weekly:
+
+Choose day (e.g., Every Monday)
+
+If Monthly:
+
+Choose date (e.g., 5th of every month)
+
+This defines execution schedule.
+
+4️⃣ Wallet Authorization
+
+User selects:
+
+Funding Wallet
+or
+
+Spot Wallet
+
+This wallet will be automatically debited.
+
+✅ Step 3: Confirm Recurring Investment
+
+User taps:
+“Confirm Recurring Investment”
+
+Technical API Call:
+createSubscription
+
+
+With:
+
+paymentMode: "RECURRING"
+scheduleType
+scheduleDayOfMonth OR scheduleDayOfWeek
+
+🎉 Step 4: Success Screen
+
+Screen: InvestmentSuccessPage
+
+Displays:
+
+SIP Created Successfully
+
+Installment amount
+
+Frequency
+
+Next scheduled investment date
+
+Example:
+“Next investment: 5 March 2026”
+
+Funds are deducted automatically as per schedule.
+
+📊 Key Differences: One-Time vs Recurring
+Feature	One-Time	Recurring (SIP)
+Transaction Type	Single	Repeated
+API Mode	ONE_TIME	RECURRING
+Schedule Setup	Not Required	Required
+Deduction	Immediate	Automated
+Ideal For	Market timing	Long-term disciplined investing
+📁 Managing Investments
+
+After investing, users can monitor everything in:
+
+Screen: MyBasketPage
+
+Here users can:
+
+View current value
+
+Compare invested vs current value
+
+Track performance
+
+Cancel active SIPs
+
+View transaction history
