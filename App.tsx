@@ -13,6 +13,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 type Sport = 'Cricket' | 'Football';
+type Role = 'USER' | 'ADMIN';
+type SettlementResult = 'WIN' | 'LOSE' | 'VOID';
 
 type Market = {
   label: string;
@@ -41,8 +43,15 @@ type BetHistory = BetSelection & {
   id: string;
   stake: number;
   payout: number;
-  status: string;
+  status: 'PLACED' | 'SETTLED';
+  result: SettlementResult | null;
   placedAt: string;
+  settledAt: string | null;
+};
+
+type AdminOpenBet = BetHistory & {
+  userName: string;
+  userEmail: string;
 };
 
 type UserProfile = {
@@ -50,6 +59,7 @@ type UserProfile = {
   name: string;
   email: string;
   wallet: number;
+  role: Role;
 };
 
 const API_BASE_URL =
@@ -90,24 +100,25 @@ function App() {
   const [selection, setSelection] = useState<BetSelection | null>(null);
   const [stakeText, setStakeText] = useState('100');
   const [betHistory, setBetHistory] = useState<BetHistory[]>([]);
+  const [adminOpenBets, setAdminOpenBets] = useState<AdminOpenBet[]>([]);
+
   const [busy, setBusy] = useState(false);
+  const [adminBusy, setAdminBusy] = useState(false);
   const [message, setMessage] = useState('Login to start betting.');
 
   const stake = Number(stakeText);
   const payout = selection ? stake * selection.odds : 0;
+  const userIsAdmin = user?.role === 'ADMIN';
+  const wallet = user?.wallet ?? 0;
+
   const canPlaceBet =
     Boolean(selection) &&
     Boolean(user) &&
     Number.isInteger(stake) &&
     stake > 0 &&
-    stake <= Number(user?.wallet || 0);
+    stake <= wallet;
 
-  const wallet = user?.wallet ?? 0;
-
-  const formattedBets = useMemo(
-    () => betHistory.slice(0, 8),
-    [betHistory],
-  );
+  const formattedBets = useMemo(() => betHistory.slice(0, 8), [betHistory]);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -172,6 +183,30 @@ function App() {
     loadBets();
   }, [token]);
 
+  useEffect(() => {
+    if (!token || !userIsAdmin) {
+      setAdminOpenBets([]);
+      return;
+    }
+
+    const loadAdminOpenBets = async () => {
+      try {
+        const response = await apiRequest('/admin/bets/open', { method: 'GET' }, token);
+        setAdminOpenBets(response.bets || []);
+      } catch (error) {
+        setMessage((error as Error).message);
+      }
+    };
+
+    loadAdminOpenBets();
+  }, [token, userIsAdmin]);
+
+  const refreshOwnBets = async (authToken: string) => {
+    const response = await apiRequest('/bets', { method: 'GET' }, authToken);
+    setBetHistory(response.bets || []);
+    setUser(prev => (prev ? { ...prev, wallet: response.wallet } : prev));
+  };
+
   const onAuthSubmit = async () => {
     if (!email || !password || (authMode === 'register' && !name)) {
       setMessage('Please fill all required auth fields.');
@@ -181,8 +216,7 @@ function App() {
     setBusy(true);
     try {
       const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
-      const payload =
-        authMode === 'login' ? { email, password } : { name, email, password };
+      const payload = authMode === 'login' ? { email, password } : { name, email, password };
 
       const response = await apiRequest(endpoint, {
         method: 'POST',
@@ -194,7 +228,7 @@ function App() {
       setUser(response.user);
       setSelection(null);
       setBetHistory([]);
-      setMessage(`Authenticated as ${response.user.name}.`);
+      setMessage(`Authenticated as ${response.user.name} (${response.user.role}).`);
       setPassword('');
     } catch (error) {
       setMessage((error as Error).message);
@@ -210,6 +244,7 @@ function App() {
     setMatches([]);
     setSelection(null);
     setBetHistory([]);
+    setAdminOpenBets([]);
     setMessage('Logged out.');
   };
 
@@ -242,7 +277,9 @@ function App() {
         {
           method: 'POST',
           body: JSON.stringify({
-            ...selection,
+            matchId: selection.matchId,
+            marketLabel: selection.marketLabel,
+            sport: selection.sport,
             stake,
           }),
         },
@@ -253,10 +290,43 @@ function App() {
       setUser(prev => (prev ? { ...prev, wallet: response.wallet } : prev));
       setSelection(null);
       setMessage(`Bet placed on ${response.bet.fixture}.`);
+
+      if (userIsAdmin) {
+        const openResponse = await apiRequest('/admin/bets/open', { method: 'GET' }, token);
+        setAdminOpenBets(openResponse.bets || []);
+      }
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const settleBet = async (betId: string, result: SettlementResult) => {
+    if (!token || !userIsAdmin) {
+      return;
+    }
+
+    setAdminBusy(true);
+    try {
+      const response = await apiRequest(
+        `/admin/bets/${betId}/settle`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ result }),
+        },
+        token,
+      );
+
+      setAdminOpenBets(prev => prev.filter(item => item.id !== betId));
+      if (response.userId === user.id) {
+        await refreshOwnBets(token);
+      }
+      setMessage(`Bet ${betId.slice(0, 8)} settled as ${result}.`);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setAdminBusy(false);
     }
   };
 
@@ -284,16 +354,9 @@ function App() {
                 {(['login', 'register'] as const).map(mode => (
                   <Pressable
                     key={mode}
-                    style={[
-                      styles.switchButton,
-                      authMode === mode && styles.switchButtonActive,
-                    ]}
+                    style={[styles.switchButton, authMode === mode && styles.switchButtonActive]}
                     onPress={() => setAuthMode(mode)}>
-                    <Text
-                      style={[
-                        styles.switchText,
-                        authMode === mode && styles.switchTextActive,
-                      ]}>
+                    <Text style={[styles.switchText, authMode === mode && styles.switchTextActive]}>
                       {mode === 'login' ? 'Login' : 'Register'}
                     </Text>
                   </Pressable>
@@ -342,7 +405,9 @@ function App() {
               <View style={styles.walletCard}>
                 <Text style={styles.walletLabel}>Wallet Balance</Text>
                 <Text style={styles.walletValue}>${wallet}</Text>
-                <Text style={styles.welcomeText}>{user.name}</Text>
+                <Text style={styles.welcomeText}>
+                  {user.name} ({user.role})
+                </Text>
                 <Pressable style={styles.logoutButton} onPress={onLogout}>
                   <Text style={styles.logoutButtonText}>Logout</Text>
                 </Pressable>
@@ -352,20 +417,13 @@ function App() {
                 {(['Cricket', 'Football'] as const).map(item => (
                   <Pressable
                     key={item}
-                    style={[
-                      styles.switchButton,
-                      selectedSport === item && styles.switchButtonActive,
-                    ]}
+                    style={[styles.switchButton, selectedSport === item && styles.switchButtonActive]}
                     onPress={() => {
                       setSelectedSport(item);
                       setSelection(null);
                       setMessage(`Showing ${item} markets.`);
                     }}>
-                    <Text
-                      style={[
-                        styles.switchText,
-                        selectedSport === item && styles.switchTextActive,
-                      ]}>
+                    <Text style={[styles.switchText, selectedSport === item && styles.switchTextActive]}>
                       {item}
                     </Text>
                   </Pressable>
@@ -383,16 +441,11 @@ function App() {
                   </Text>
                   <View style={styles.marketRow}>
                     {match.markets.map(market => {
-                      const active =
-                        selection?.matchId === match.id &&
-                        selection.marketLabel === market.label;
+                      const active = selection?.matchId === match.id && selection.marketLabel === market.label;
                       return (
                         <Pressable
                           key={market.label}
-                          style={[
-                            styles.marketButton,
-                            active && styles.marketActive,
-                          ]}
+                          style={[styles.marketButton, active && styles.marketActive]}
                           onPress={() => onPickMarket(match, market)}>
                           <Text style={styles.marketLabel}>{market.label}</Text>
                           <Text style={styles.marketOdds}>@ {market.odds}</Text>
@@ -427,15 +480,10 @@ function App() {
                   Potential Payout: ${Number.isFinite(payout) ? payout.toFixed(2) : '0.00'}
                 </Text>
                 <Pressable
-                  style={[
-                    styles.betButton,
-                    (!canPlaceBet || busy) && styles.betButtonDisabled,
-                  ]}
+                  style={[styles.betButton, (!canPlaceBet || busy) && styles.betButtonDisabled]}
                   onPress={placeBet}
                   disabled={!canPlaceBet || busy}>
-                  <Text style={styles.betButtonText}>
-                    {busy ? 'Placing...' : 'Place Bet'}
-                  </Text>
+                  <Text style={styles.betButtonText}>{busy ? 'Placing...' : 'Place Bet'}</Text>
                 </Pressable>
               </View>
 
@@ -453,10 +501,56 @@ function App() {
                       <Text style={styles.historyMeta}>
                         Stake ${item.stake} - Payout ${item.payout.toFixed(2)}
                       </Text>
+                      {item.result ? (
+                        <Text style={styles.historyMeta}>Result: {item.result}</Text>
+                      ) : null}
                     </View>
                   ))
                 )}
               </View>
+
+              {userIsAdmin ? (
+                <>
+                  <Text style={styles.sectionTitle}>Admin Settlement</Text>
+                  <View style={styles.adminCard}>
+                    {adminOpenBets.length === 0 ? (
+                      <Text style={styles.historyEmpty}>No open bets to settle.</Text>
+                    ) : (
+                      adminOpenBets.map(item => (
+                        <View key={item.id} style={styles.historyItem}>
+                          <Text style={styles.historyFixture}>{item.fixture}</Text>
+                          <Text style={styles.historyMeta}>
+                            {item.userName} ({item.userEmail})
+                          </Text>
+                          <Text style={styles.historyMeta}>
+                            Stake ${item.stake} - Payout ${item.payout.toFixed(2)}
+                          </Text>
+                          <View style={styles.adminButtonRow}>
+                            <Pressable
+                              style={[styles.outcomeButton, styles.outcomeWin]}
+                              disabled={adminBusy}
+                              onPress={() => settleBet(item.id, 'WIN')}>
+                              <Text style={styles.outcomeText}>WIN</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.outcomeButton, styles.outcomeLose]}
+                              disabled={adminBusy}
+                              onPress={() => settleBet(item.id, 'LOSE')}>
+                              <Text style={styles.outcomeText}>LOSE</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.outcomeButton, styles.outcomeVoid]}
+                              disabled={adminBusy}
+                              onPress={() => settleBet(item.id, 'VOID')}>
+                              <Text style={styles.outcomeText}>VOID</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </>
+              ) : null}
             </>
           )}
 
@@ -673,6 +767,13 @@ const styles = StyleSheet.create({
     borderColor: '#224a6b',
     padding: 12,
   },
+  adminCard: {
+    backgroundColor: '#0d354b',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2f6888',
+    padding: 12,
+  },
   historyEmpty: {
     color: '#9ab8ce',
   },
@@ -690,6 +791,30 @@ const styles = StyleSheet.create({
   historyMeta: {
     color: '#a5c2d8',
     fontSize: 12,
+  },
+  adminButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  outcomeButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  outcomeWin: {
+    backgroundColor: '#1f7d4e',
+  },
+  outcomeLose: {
+    backgroundColor: '#93524f',
+  },
+  outcomeVoid: {
+    backgroundColor: '#506388',
+  },
+  outcomeText: {
+    color: '#eef7ff',
+    fontWeight: '700',
   },
   message: {
     color: '#9dc3de',

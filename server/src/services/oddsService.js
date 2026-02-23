@@ -1,9 +1,14 @@
-const { oddsApiKey, oddsRegion } = require('../config/env');
+const {
+  oddsApiKey,
+  oddsRegion,
+  oddsCricketSportKey,
+  oddsFootballSportKey,
+} = require('../config/env');
 const fallbackMatches = require('./fallbackMatches');
 
 const sportKeyMap = {
-  Cricket: 'cricket',
-  Football: 'soccer_epl',
+  Cricket: oddsCricketSportKey,
+  Football: oddsFootballSportKey,
 };
 
 function normalizeMatch(event, sport) {
@@ -20,7 +25,7 @@ function normalizeMatch(event, sport) {
       return { label: `${outcome.name} Win`, odds: outcome.price };
     });
 
-  if (markets.length === 0) {
+  if (markets.length < 2) {
     return null;
   }
 
@@ -54,10 +59,7 @@ async function fetchMatchesFromOddsApi(sport) {
   }
 
   const events = await response.json();
-  return events
-    .map(event => normalizeMatch(event, sport))
-    .filter(Boolean)
-    .slice(0, 10);
+  return events.map(event => normalizeMatch(event, sport)).filter(Boolean).slice(0, 10);
 }
 
 async function getMatchesBySport(sport) {
@@ -67,7 +69,7 @@ async function getMatchesBySport(sport) {
       return apiMatches;
     }
   } catch (_error) {
-    // Intentionally ignored; fallback data is returned.
+    // If API fails or no key is configured, fallback fixtures are used.
   }
 
   return fallbackMatches[sport] || [];
